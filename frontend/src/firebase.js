@@ -6,13 +6,13 @@ import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCK6LBh9hl22A27By8bhResppHyT33Ehc4",
-  authDomain: "urbanclean-solution-challenge.firebaseapp.com",
-  projectId: "urbanclean-solution-challenge",
-  storageBucket: "urbanclean-solution-challenge.firebasestorage.app",
-  messagingSenderId: "375106012466",
-  appId: "1:375106012466:web:3b0224ab7644617b22032b",
-  measurementId: "G-RGGEE3ZSDG"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase App

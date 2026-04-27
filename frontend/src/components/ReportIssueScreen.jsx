@@ -16,7 +16,7 @@ let DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 import { db, storage } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const ReportIssueScreen = () => {
@@ -911,6 +911,104 @@ const ReportIssueScreen = () => {
 
         </form>
       </div>
+
+      {/* Citizen Status Tracker */}
+      <div className="max-w-4xl mx-auto mt-16 pb-24 px-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+              <div className="bg-brand-green/20 p-2 rounded-lg">
+                <Clock className="text-brand-green" size={24} />
+              </div>
+              Track Your Reports
+            </h2>
+            <p className="text-gray-500 text-sm mt-1 ml-11">Real-time status of your urban hazard reports</p>
+          </div>
+          
+          <div className="relative group">
+            <div className="absolute inset-0 bg-brand-green/20 blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
+            <input 
+              type="text" 
+              placeholder="Search by Case ID..." 
+              className="relative bg-dark-800/80 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-green/50 w-full md:w-64 transition-all"
+            />
+          </div>
+        </div>
+
+        <UserReportsFeed />
+      </div>
+    </div>
+  );
+};
+
+// Sub-component for the Citizen Feed
+const UserReportsFeed = () => {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // In a real app, we'd filter by user ID. For the demo, we show the latest reports.
+    const q = query(collection(db, "issues"), orderBy("timestamp", "desc"), limit(5));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setReports(data);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-12 text-gray-500 gap-2">
+      <Loader2 className="animate-spin text-brand-green" size={32} />
+      <span className="text-sm font-medium">Connecting to UrbanSafe Grid...</span>
+    </div>
+  );
+
+  if (reports.length === 0) return (
+    <div className="glass-panel p-10 text-center text-gray-500 border-dashed">
+      <p className="text-sm italic">You haven't reported any issues yet. Use the form above to start.</p>
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4">
+      {reports.map((report) => (
+        <div key={report.id} className="glass-panel p-5 border border-white/5 hover:border-brand-green/30 transition-all group relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-brand-green/5 blur-2xl group-hover:bg-brand-green/10 transition-all"></div>
+          
+          <div className="flex justify-between items-start mb-4">
+            <div className="bg-dark-800/80 p-2.5 rounded-lg border border-white/5 shadow-inner">
+              {report.ai_analysis?.severity === 'High' ? (
+                <AlertCircle size={20} className="text-red-400" />
+              ) : (
+                <CheckCircle2 size={20} className="text-brand-green" />
+              )}
+            </div>
+            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+              report.status === 'pending' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 
+              report.status === 'in-progress' ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20' : 
+              'bg-brand-green/10 text-brand-green border-brand-green/20'
+            }`}>
+              {report.status}
+            </span>
+          </div>
+
+          <h3 className="font-bold text-white mb-1 group-hover:text-brand-green transition-colors">{report.type}</h3>
+          <p className="text-xs text-gray-500 mb-4 flex items-center gap-1">
+            <MapPin size={12} /> {report.location}
+          </p>
+
+          <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+            <span className="text-[10px] text-gray-600 font-mono">Case: {report.id.substring(0, 8).toUpperCase()}</span>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-green">
+              AI Priority: {report.ai_analysis?.severity || 'Medium'}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
