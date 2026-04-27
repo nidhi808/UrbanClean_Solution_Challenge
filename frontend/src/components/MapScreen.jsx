@@ -1,20 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Info, AlertTriangle, CheckCircle, Crosshair, Map as MapIcon, ShieldAlert, X, Loader2 } from 'lucide-react';
-
-// Starting markers state
-const initialMarkers = [
-  { id: 1, lat: 19.0760, lng: 72.8777, severity: 'critical', type: 'Severe Pothole', location: 'Main St & 5th Ave', priority: 'Immediate Repair', status: 'Pending' },
-  { id: 2, lat: 19.0522, lng: 72.9005, severity: 'high', type: 'Medium Pothole', location: 'Riverside Blvd', priority: 'Schedule within 48h', status: 'Queued' },
-  { id: 3, lat: 19.0600, lng: 72.8850, severity: 'low', type: 'Minor Surface Damage', location: 'Park Lane', priority: 'Monitor', status: 'Logged' },
-  { id: 4, lat: 19.0800, lng: 72.8600, severity: 'critical', type: 'Deep Pothole', location: 'Highway 9 On-Ramp', priority: 'Immediate Repair', status: 'Pending' },
-  { id: 5, lat: 19.0950, lng: 72.8700, severity: 'high', type: 'Cracked Road', location: 'Industrial Pkwy', priority: 'Schedule within 48h', status: 'Queued' },
-];
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const DEPOT_LOCATION = [19.0850, 72.8800]; // Simulated Municipal Depot
 
 const MapScreen = ({ autoExecute = false }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
-  const [markers, setMarkers] = useState(initialMarkers);
+  const [markers, setMarkers] = useState([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [planExecuted, setPlanExecuted] = useState(false);
   const mapRef = useRef(null);
@@ -64,6 +57,19 @@ const MapScreen = ({ autoExecute = false }) => {
       }
     };
   }, []); // Run once on mount
+
+  // Fetch real markers from Firestore
+  useEffect(() => {
+    const q = query(collection(db, "issues"), orderBy("timestamp", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const issuesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMarkers(issuesData);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Function to render markers based on state
   const renderMarkers = (currentMarkers, mapInstance) => {
