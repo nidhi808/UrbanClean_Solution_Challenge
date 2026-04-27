@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { auth } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardView from './components/DashboardView';
@@ -13,9 +15,40 @@ import { LogOut, Leaf } from 'lucide-react';
 
 function App() {
   const [userRole, setUserRole] = useState(() => localStorage.getItem('urbanclean_role') || null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('urbanclean_view') || 'dashboard');
   const [showLanding, setShowLanding] = useState(!userRole);
   const [autoExecuteMap, setAutoExecuteMap] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+        setUserRole(null);
+        localStorage.removeItem('urbanclean_role');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = (role, user) => {
+    setUserRole(role);
+    setCurrentUser(user);
+    localStorage.setItem('urbanclean_role', role);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.clear();
+      setUserRole(null);
+      setCurrentUser(null);
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   useEffect(() => {
     if (userRole) {
@@ -34,7 +67,7 @@ function App() {
   }
 
   if (!userRole) {
-    return <LoginScreen onLogin={setUserRole} />;
+    return <LoginScreen onLogin={handleLogin} />;
   }
 
   // Layout for Citizens
@@ -49,14 +82,22 @@ function App() {
               <div className="bg-gradient-to-tr from-brand-green to-[#34d399] p-2 rounded-xl text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]">
                 <Leaf size={24} className="fill-white/20" />
               </div>
-              <span className="font-bold text-xl tracking-tight">UrbanClean <span className="text-sm font-medium text-gray-400">Citizen Portal</span></span>
+              <div className="flex flex-col">
+                <span className="font-bold text-xl tracking-tight leading-tight">UrbanClean</span>
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">Welcome, {currentUser?.displayName || 'Citizen'}</span>
+              </div>
             </div>
-            <button 
-              onClick={() => { localStorage.clear(); setUserRole(null); }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 hover:text-white glass-button transition-colors"
-            >
-              <LogOut size={16} /> Logout
-            </button>
+            <div className="flex items-center gap-4">
+              {currentUser?.photoURL && (
+                <img src={currentUser.photoURL} alt="User" className="w-8 h-8 rounded-full border border-white/10" />
+              )}
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 hover:text-white glass-button transition-colors"
+              >
+                <LogOut size={16} /> Logout
+              </button>
+            </div>
           </header>
           
           <main className="flex-1 overflow-y-auto">
@@ -73,7 +114,7 @@ function App() {
       <div className="ambient-glow-blue top-0 left-0"></div>
       <div className="ambient-glow-purple bottom-0 right-0"></div>
 
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} onLogout={() => { localStorage.clear(); setUserRole(null); }} />
+      <Sidebar currentView={currentView} setCurrentView={setCurrentView} onLogout={handleLogout} />
       
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
         <Header />

@@ -1,7 +1,10 @@
 import React from 'react';
 import { Search, Bell, Menu } from 'lucide-react';
 
+import { auth } from '../firebase';
+
 const Header = () => {
+  const user = auth.currentUser;
   return (
     <header className="h-20 glass-panel border-x-0 border-t-0 rounded-none px-6 lg:px-8 flex items-center justify-between z-20">
       <div className="flex items-center gap-4">
@@ -30,9 +33,17 @@ const Header = () => {
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-dark-900"></span>
         </button>
         
-        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-brand-blue to-brand-purple p-[2px] cursor-pointer">
-          <div className="w-full h-full rounded-full bg-dark-800 flex items-center justify-center overflow-hidden">
-            <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Admin&backgroundColor=transparent" alt="Admin" className="w-full h-full object-cover" />
+        <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-brand-blue to-brand-purple p-[2px] cursor-pointer group relative">
+          <div className="w-full h-full rounded-full bg-dark-800 flex items-center justify-center overflow-hidden border border-white/10">
+            <img 
+              src={user?.photoURL || "https://api.dicebear.com/7.x/notionists/svg?seed=Admin&backgroundColor=transparent"} 
+              alt="Profile" 
+              className="w-full h-full object-cover" 
+            />
+          </div>
+          {/* Tooltip on hover */}
+          <div className="absolute top-12 right-0 bg-dark-800 border border-white/10 px-3 py-1.5 rounded-lg text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            {user?.displayName || 'Administrator'}
           </div>
         </div>
       </div>
