@@ -15,8 +15,8 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-import { db, storage } from '../firebase';
-import { collection, addDoc, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db, storage, auth } from '../firebase';
+import { collection, addDoc, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { broadcastReport } from '../syncService';
 
@@ -470,10 +470,12 @@ const ReportIssueScreen = () => {
     // This makes the app feel instant!
     const newReport = { 
       id: detectionData.caseId,
+      userId: auth.currentUser?.uid || 'anonymous',
+      userName: auth.currentUser?.displayName || 'Citizen',
       type: detectionData.detectedType || issueType,
       location: location,
       description: description,
-      localImage: image, // Use local blob for zero-latency
+      localImage: image, 
       ai_analysis: detectionData,
       status: "pending",
       timestamp: new Date().toLocaleString()
@@ -495,6 +497,8 @@ const ReportIssueScreen = () => {
           downloadURL = await getDownloadURL(snapshot);
 
           await addDoc(collection(db, "issues"), {
+            userId: auth.currentUser?.uid || 'anonymous',
+            userName: auth.currentUser?.displayName || 'Citizen',
             type: detectionData.detectedType || issueType,
             location: location,
             description: description,
@@ -954,9 +958,16 @@ const UserReportsFeed = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth.currentUser) return;
+
     let timeoutId;
     try {
-      const q = query(collection(db, "issues"), orderBy("timestamp", "desc"), limit(5));
+      const q = query(
+        collection(db, "issues"), 
+        where("userId", "==", auth.currentUser.uid),
+        orderBy("timestamp", "desc"), 
+        limit(10)
+      );
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const data = snapshot.docs.map(doc => ({
           id: doc.id,
