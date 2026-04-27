@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertCircle, AlertTriangle, Clock, Loader2 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { subscribeToReports, getLocalBackupReports } from '../syncService';
 
 const PriorityBadge = ({ priority }) => {
   const styles = {
@@ -23,16 +24,38 @@ const IssueFeed = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Load local backups first for instant UI
+    const initialData = getLocalBackupReports();
+    setIssues(initialData);
+
+    // 2. Try Firestore
     const q = query(collection(db, "issues"), orderBy("timestamp", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const issuesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setIssues(issuesData);
+    const unsubscribeFirestore = onSnapshot(q, (snapshot) => {
+      const dbIssues = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Merge and unique
+      setIssues(prev => {
+        const combined = [...dbIssues, ...prev];
+        return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+      });
+      setLoading(false);
+    }, (err) => {
+      console.warn("IssueFeed Firestore issue (Using Local Sync):", err.message);
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    // 3. Listen for Live Broadcasts (Super-Sync)
+    const unsubscribeSync = subscribeToReports((newReport) => {
+      setIssues(prev => {
+        if (prev.find(r => r.id === newReport.id)) return prev;
+        return [newReport, ...prev];
+      });
+    });
+
+    return () => {
+      unsubscribeFirestore();
+      unsubscribeSync();
+    };
   }, []);
 
   const formatTime = (ts) => {

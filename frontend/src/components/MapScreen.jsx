@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Info, AlertTriangle, CheckCircle, Crosshair, Map as MapIcon, ShieldAlert, X, Loader2 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import { subscribeToReports, getLocalBackupReports } from '../syncService';
 
 const DEPOT_LOCATION = [19.0850, 72.8800]; // Simulated Municipal Depot
 
@@ -58,17 +59,38 @@ const MapScreen = ({ autoExecute = false }) => {
     };
   }, []); // Run once on mount
 
-  // Fetch real markers from Firestore
+  // Fetch real markers from Firestore + Local Sync
   useEffect(() => {
+    // 1. Initial local backup
+    setMarkers(getLocalBackupReports());
+
+    // 2. Listen to Firestore
     const q = query(collection(db, "issues"), orderBy("timestamp", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const issuesData = snapshot.docs.map(doc => ({
+    const unsubscribeFirestore = onSnapshot(q, (snapshot) => {
+      const dbIssues = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setMarkers(issuesData);
+      setMarkers(prev => {
+        const combined = [...dbIssues, ...prev];
+        return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+      });
+    }, (err) => {
+      console.warn("Map Firestore issue (Using Local Sync):", err.message);
     });
-    return () => unsubscribe();
+
+    // 3. Live Broadcasts
+    const unsubscribeSync = subscribeToReports((newReport) => {
+      setMarkers(prev => {
+        if (prev.find(r => r.id === newReport.id)) return prev;
+        return [newReport, ...prev];
+      });
+    });
+
+    return () => {
+      unsubscribeFirestore();
+      unsubscribeSync();
+    };
   }, []);
 
   // Function to render markers based on state

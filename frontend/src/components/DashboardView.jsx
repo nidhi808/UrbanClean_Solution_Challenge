@@ -6,24 +6,43 @@ import AIRecommendationCard from './AIRecommendationCard';
 import { AlertTriangle, MapPin, Zap, AlertCircle, Activity } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { subscribeToReports, getLocalBackupReports } from '../syncService';
 
 const DashboardView = ({ setCurrentView }) => {
   const [stats, setStats] = React.useState({ total: 0, critical: 0, zones: 0 });
 
   React.useEffect(() => {
-    const issuesRef = collection(db, 'issues');
-    const unsubscribe = onSnapshot(issuesRef, (snapshot) => {
-      const reports = snapshot.docs.map(doc => doc.data());
-      const critical = reports.filter(r => r.ai_analysis?.severity === 'high' || r.status === 'pending').length;
+    const updateStats = (reports) => {
+      const critical = reports.filter(r => r.ai_analysis?.severity === 'High' || r.status === 'pending').length;
       const zones = new Set(reports.map(r => r.location?.split(',')[0])).size;
-      
-      setStats({
-        total: reports.length,
-        critical: critical,
-        zones: zones
-      });
+      setStats({ total: reports.length, critical: critical, zones: zones });
+    };
+
+    // 1. Initial stats from backup
+    updateStats(getLocalBackupReports());
+
+    // 2. Firestore Sync
+    const issuesRef = collection(db, 'issues');
+    const unsubscribeFirestore = onSnapshot(issuesRef, (snapshot) => {
+      const dbReports = snapshot.docs.map(doc => doc.data());
+      updateStats([...dbReports, ...getLocalBackupReports()]);
+    }, (err) => {
+      console.warn("Stats Firestore issue (Using Local Sync):", err.message);
     });
-    return () => unsubscribe();
+
+    // 3. Live Broadcasts
+    const unsubscribeSync = subscribeToReports((newReport) => {
+      setStats(prev => ({
+        total: prev.total + 1,
+        critical: (newReport.ai_analysis?.severity === 'High' || newReport.status === 'pending') ? prev.critical + 1 : prev.critical,
+        zones: prev.zones // Simplification
+      }));
+    });
+
+    return () => {
+      unsubscribeFirestore();
+      unsubscribeSync();
+    };
   }, []);
 
   return (

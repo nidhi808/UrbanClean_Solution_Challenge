@@ -18,6 +18,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 import { db, storage } from '../firebase';
 import { collection, addDoc, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { broadcastReport } from '../syncService';
 
 const ReportIssueScreen = () => {
   const [image, setImage] = useState(null);
@@ -467,7 +468,8 @@ const ReportIssueScreen = () => {
     
     // Step 2: Show the report IMMEDIATELY to the user using the local blob URL
     // This makes the app feel instant!
-    setAiReport({ 
+    const newReport = { 
+      id: detectionData.caseId,
       type: detectionData.detectedType || issueType,
       location: location,
       description: description,
@@ -475,7 +477,10 @@ const ReportIssueScreen = () => {
       ai_analysis: detectionData,
       status: "pending",
       timestamp: new Date().toLocaleString()
-    });
+    };
+
+    setAiReport(newReport);
+    broadcastReport(newReport); // Send to Admin!
 
     setIsSubmitting(false);
 
