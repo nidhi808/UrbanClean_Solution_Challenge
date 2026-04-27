@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Camera, X, MapPin, FileText, Send, CheckCircle2, Loader2, Download, AlertTriangle, Cpu, Activity, Map as MapIcon } from 'lucide-react';
+import { UploadCloud, Camera, X, MapPin, FileText, Send, CheckCircle2, Loader2, Download, AlertTriangle, Cpu, Activity, Map as MapIcon, AlertCircle, Clock } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -483,22 +483,24 @@ const ReportIssueScreen = () => {
     (async () => {
       try {
         let downloadURL = "";
-        const storageRef = ref(storage, `user_reports/${Date.now()}_${rawImageFile.name}`);
-        const snapshot = await uploadBytes(storageRef, rawImageFile);
-        downloadURL = await getDownloadURL(snapshot);
+        // Only try upload if Firebase is likely configured
+        if (rawImageFile && db.app.options.apiKey) {
+          const storageRef = ref(storage, `user_reports/${Date.now()}_${rawImageFile.name}`);
+          const snapshot = await uploadBytes(storageRef, rawImageFile);
+          downloadURL = await getDownloadURL(snapshot);
 
-        await addDoc(collection(db, "issues"), {
-          type: detectionData.detectedType || issueType,
-          location: location,
-          description: description,
-          image_url: downloadURL,
-          ai_analysis: detectionData,
-          status: "pending",
-          timestamp: new Date()
-        });
-        console.log("Background upload complete!");
+          await addDoc(collection(db, "issues"), {
+            type: detectionData.detectedType || issueType,
+            location: location,
+            description: description,
+            image_url: downloadURL,
+            ai_analysis: detectionData,
+            status: "pending",
+            timestamp: new Date()
+          });
+        }
       } catch (err) {
-        console.error("Background sync failed:", err);
+        console.warn("Background sync skipped or failed (Demo Mode):", err.message);
       }
     })();
   };
@@ -947,17 +949,32 @@ const UserReportsFeed = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In a real app, we'd filter by user ID. For the demo, we show the latest reports.
-    const q = query(collection(db, "issues"), orderBy("timestamp", "desc"), limit(5));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setReports(data);
+    let timeoutId;
+    try {
+      const q = query(collection(db, "issues"), orderBy("timestamp", "desc"), limit(5));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setReports(data);
+        setLoading(false);
+      }, (err) => {
+        console.warn("Firestore snapshot error:", err.message);
+        setLoading(false);
+      });
+
+      // Fail-safe timeout: Stop loading after 5 seconds
+      timeoutId = setTimeout(() => setLoading(false), 5000);
+
+      return () => {
+        unsubscribe();
+        clearTimeout(timeoutId);
+      };
+    } catch (err) {
+      console.warn("Firestore connection skipped:", err.message);
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }
   }, []);
 
   if (loading) return (
